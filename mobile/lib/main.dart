@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
@@ -32,6 +33,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const List<String> _scopes = [
+    'email',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/gmail.send',
+  ];
+
   final TextEditingController _textoController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
 
@@ -41,11 +48,7 @@ class _HomePageState extends State<HomePage> {
   bool _listening = false;
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: const [
-      'email',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/gmail.send',
-    ],
+    scopes: _scopes,
     serverClientId: AppConfig.googleWebClientId,
     forceCodeForRefreshToken: true,
   );
@@ -61,6 +64,14 @@ class _HomePageState extends State<HomePage> {
       if (account == null) {
         setState(() => _status = 'Login cancelado.');
         return;
+      }
+
+      if (kIsWeb) {
+        final granted = await _googleSignIn.requestScopes(_scopes);
+        if (!granted) {
+          setState(() => _status = 'Permissões negadas para calendário e e-mail.');
+          return;
+        }
       }
 
       final serverAuthCode = account.serverAuthCode;
