@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+pydantic-settings
+sqlalchemy
+pymysql
+requests
+google-auth
+google-auth-oauthlib
+google-api-python-client
+python-jose[cryptography]
+apscheduler
+openai
+email-validator
