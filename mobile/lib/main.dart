@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'app_config.dart';
+import 'speech_service.dart';
 
 void main() {
   runApp(const AgendaApp());
@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
   ];
 
   final TextEditingController _textoController = TextEditingController();
-  final stt.SpeechToText _speech = stt.SpeechToText();
+  final SpeechService _speech = createSpeechService();
 
   String? _jwt;
   String _status = 'Desconectado';
@@ -162,10 +162,9 @@ class _HomePageState extends State<HomePage> {
       });
 
       await _speech.listen(
-        localeId: 'pt_BR',
-        onResult: (result) {
+        onResult: (text) {
           setState(() {
-            _textoController.text = result.recognizedWords;
+            _textoController.text = text;
           });
         },
       );
