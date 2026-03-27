@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
@@ -55,47 +56,54 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
     if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(status_code=500, detail="Google OAuth não configurado")
 
-    if payload.code:
-        try:
-            token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
-        except RequestException:
-            raise HTTPException(status_code=400, detail="Falha ao trocar code por tokens")
+    try:
+        if payload.code:
+            try:
+                token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
+            except RequestException:
+                raise HTTPException(status_code=400, detail="Falha ao trocar code por tokens")
 
-        if "id_token" not in token_data:
-            raise HTTPException(status_code=400, detail="id_token não retornado pelo Google")
+            if "id_token" not in token_data:
+                raise HTTPException(status_code=400, detail="id_token não retornado pelo Google")
 
-        try:
-            userinfo = get_userinfo_from_id_token(token_data["id_token"])
-        except Exception:
-            raise HTTPException(status_code=400, detail="Falha ao validar id_token")
-        if not userinfo.get("sub"):
-            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+            try:
+                userinfo = get_userinfo_from_id_token(token_data["id_token"])
+            except Exception:
+                raise HTTPException(status_code=400, detail="Falha ao validar id_token")
+            if not userinfo.get("sub"):
+                raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
 
-        try:
-            user = upsert_user_and_token(db, userinfo, token_data, payload.timezone)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-    elif payload.id_token:
-        try:
-            userinfo = get_userinfo_from_id_token(payload.id_token)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Falha ao validar id_token")
-        if not userinfo.get("sub"):
-            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
-        user = upsert_user(db, userinfo, payload.timezone)
-    elif payload.access_token:
-        try:
-            userinfo = get_userinfo_from_access_token(payload.access_token)
-        except RequestException:
-            raise HTTPException(status_code=400, detail="Falha ao validar access_token")
-        if not userinfo.get("sub"):
-            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
-        user = upsert_user(db, userinfo, payload.timezone)
-    else:
-        raise HTTPException(status_code=400, detail="Informe code ou id_token")
-    token = create_access_token(user.id)
+            try:
+                user = upsert_user_and_token(db, userinfo, token_data, payload.timezone)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
+        elif payload.id_token:
+            try:
+                userinfo = get_userinfo_from_id_token(payload.id_token)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Falha ao validar id_token")
+            if not userinfo.get("sub"):
+                raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+            user = upsert_user(db, userinfo, payload.timezone)
+        elif payload.access_token:
+            try:
+                userinfo = get_userinfo_from_access_token(payload.access_token)
+            except RequestException:
+                raise HTTPException(status_code=400, detail="Falha ao validar access_token")
+            if not userinfo.get("sub"):
+                raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+            user = upsert_user(db, userinfo, payload.timezone)
+        else:
+            raise HTTPException(status_code=400, detail="Informe code ou id_token")
+        token = create_access_token(user.id)
 
-    return {"token": token, "user": user}
+        return {"token": token, "user": user}
+    except HTTPException:
+        raise
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Erro ao acessar o banco")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Erro inesperado no login")
 
 
 @app.post("/compromissos", response_model=CommitmentOut)
