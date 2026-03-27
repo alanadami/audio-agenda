@@ -6,6 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
+from google.auth.exceptions import RefreshError
+from googleapiclient.errors import HttpError
 from app.auth import create_access_token, get_current_user
 from app.calendar_service import create_calendar_event
 from app.config import settings
@@ -137,17 +139,23 @@ def criar_compromisso(
     db.add(compromisso)
     db.flush()
 
-    if usuario.token:
-        creds = build_credentials_from_token(usuario.token)
-    elif payload.access_token:
-        creds = build_credentials_from_access_token(payload.access_token)
-    else:
-        raise HTTPException(status_code=400, detail="Usuário sem token do Google")
-    evento = create_calendar_event(creds, analise, usuario.timezone or settings.default_timezone)
+    try:
+        if usuario.token:
+            creds = build_credentials_from_token(usuario.token)
+        elif payload.access_token:
+            creds = build_credentials_from_access_token(payload.access_token)
+        else:
+            raise HTTPException(status_code=400, detail="Usuário sem token do Google")
 
-    compromisso.google_event_id = evento.get("id")
-    db.commit()
-    db.refresh(compromisso)
+        evento = create_calendar_event(creds, analise, usuario.timezone or settings.default_timezone)
+
+        compromisso.google_event_id = evento.get("id")
+        db.commit()
+        db.refresh(compromisso)
+    except (HttpError, RefreshError):
+        raise HTTPException(status_code=400, detail="Falha ao criar evento no Google Calendar")
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Erro ao salvar compromisso no banco")
 
     return {
         "id": compromisso.id,
