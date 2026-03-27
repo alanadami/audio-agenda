@@ -31,7 +31,7 @@ app.add_middleware(
         "https://alanadami.github.io",
     ],
     allow_origin_regex=r"https?://localhost(:\d+)?",
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
