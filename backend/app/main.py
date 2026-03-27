@@ -9,6 +9,8 @@ from app.auth import create_access_token, get_current_user
 from app.calendar_service import create_calendar_event
 from app.config import settings
 from app.db import get_db
+from requests import RequestException
+
 from app.google_oauth import (
     exchange_code_for_tokens,
     get_userinfo_from_id_token,
@@ -54,12 +56,18 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Google OAuth não configurado")
 
     if payload.code:
-        token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
+        try:
+            token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
+        except RequestException:
+            raise HTTPException(status_code=400, detail="Falha ao trocar code por tokens")
 
         if "id_token" not in token_data:
             raise HTTPException(status_code=400, detail="id_token não retornado pelo Google")
 
-        userinfo = get_userinfo_from_id_token(token_data["id_token"])
+        try:
+            userinfo = get_userinfo_from_id_token(token_data["id_token"])
+        except Exception:
+            raise HTTPException(status_code=400, detail="Falha ao validar id_token")
         if not userinfo.get("sub"):
             raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
 
@@ -68,12 +76,18 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     elif payload.id_token:
-        userinfo = get_userinfo_from_id_token(payload.id_token)
+        try:
+            userinfo = get_userinfo_from_id_token(payload.id_token)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Falha ao validar id_token")
         if not userinfo.get("sub"):
             raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
         user = upsert_user(db, userinfo, payload.timezone)
     elif payload.access_token:
-        userinfo = get_userinfo_from_access_token(payload.access_token)
+        try:
+            userinfo = get_userinfo_from_access_token(payload.access_token)
+        except RequestException:
+            raise HTTPException(status_code=400, detail="Falha ao validar access_token")
         if not userinfo.get("sub"):
             raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
         user = upsert_user(db, userinfo, payload.timezone)
