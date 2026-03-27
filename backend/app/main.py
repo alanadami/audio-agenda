@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
@@ -23,6 +24,17 @@ from app.parser import parse_message
 from app.schemas import AuthCodeIn, AuthResponse, CommitmentCreate, CommitmentOut
 
 app = FastAPI(title="Agenda App API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://alanadami.github.io",
+    ],
+    allow_origin_regex=r"https?://localhost(:\d+)?",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
