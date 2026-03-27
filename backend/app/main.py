@@ -114,32 +114,32 @@ def criar_compromisso(
     usuario: AppUsuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    agora = datetime.now(ZoneInfo(usuario.timezone or settings.default_timezone))
-    analise = parse_message(payload.texto, agora)
-
-    if analise.get("erro"):
-        raise HTTPException(status_code=400, detail=analise["erro"])
-
     try:
-        data_evento = datetime.strptime(analise["data"], "%Y-%m-%d").date()
-        hora_evento = datetime.strptime(analise["hora"], "%H:%M:%S").time()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Data ou hora inválida retornada pela IA")
+        agora = datetime.now(ZoneInfo(usuario.timezone or settings.default_timezone))
+        analise = parse_message(payload.texto, agora)
 
-    compromisso = AppCompromisso(
-        usuario_id=usuario.id,
-        titulo=analise["titulo"],
-        descricao=analise.get("descricao"),
-        data=data_evento,
-        hora=hora_evento,
-        local=analise.get("local"),
-        texto_original=payload.texto,
-    )
+        if analise.get("erro"):
+            raise HTTPException(status_code=400, detail=analise["erro"])
 
-    db.add(compromisso)
-    db.flush()
+        try:
+            data_evento = datetime.strptime(analise["data"], "%Y-%m-%d").date()
+            hora_evento = datetime.strptime(analise["hora"], "%H:%M:%S").time()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Data ou hora inválida retornada pela IA")
 
-    try:
+        compromisso = AppCompromisso(
+            usuario_id=usuario.id,
+            titulo=analise["titulo"],
+            descricao=analise.get("descricao"),
+            data=data_evento,
+            hora=hora_evento,
+            local=analise.get("local"),
+            texto_original=payload.texto,
+        )
+
+        db.add(compromisso)
+        db.flush()
+
         if usuario.token:
             creds = build_credentials_from_token(usuario.token)
         elif payload.access_token:
@@ -156,6 +156,10 @@ def criar_compromisso(
         raise HTTPException(status_code=400, detail="Falha ao criar evento no Google Calendar")
     except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Erro ao salvar compromisso no banco")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Erro inesperado ao criar compromisso")
 
     return {
         "id": compromisso.id,
