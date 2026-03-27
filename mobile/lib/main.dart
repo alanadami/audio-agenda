@@ -34,7 +34,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   static const List<String> _scopes = [
+    'openid',
     'email',
+    'profile',
     'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/gmail.send',
   ];
@@ -81,8 +83,9 @@ class _HomePageState extends State<HomePage> {
       final serverAuthCode = account.serverAuthCode;
       final hasAuthCode = serverAuthCode != null && serverAuthCode.isNotEmpty;
       final hasIdToken = auth.idToken != null && auth.idToken!.isNotEmpty;
+      final hasAccessToken = auth.accessToken != null && auth.accessToken!.isNotEmpty;
 
-      if (!hasAuthCode && !hasIdToken) {
+      if (!hasAuthCode && !hasIdToken && !hasAccessToken) {
         setState(() => _status = 'Falha ao obter credenciais do Google.');
         return;
       }
@@ -94,8 +97,10 @@ class _HomePageState extends State<HomePage> {
 
       if (hasAuthCode) {
         payload['code'] = serverAuthCode;
-      } else {
+      } else if (hasIdToken) {
         payload['id_token'] = auth.idToken;
+        payload['access_token'] = auth.accessToken;
+      } else if (hasAccessToken) {
         payload['access_token'] = auth.accessToken;
       }
 

@@ -11,6 +11,7 @@ from app.db import get_db
 from app.google_oauth import (
     exchange_code_for_tokens,
     get_userinfo_from_id_token,
+    get_userinfo_from_access_token,
     upsert_user_and_token,
     upsert_user,
     build_credentials_from_token,
@@ -56,6 +57,11 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail=str(exc))
     elif payload.id_token:
         userinfo = get_userinfo_from_id_token(payload.id_token)
+        if not userinfo.get("sub"):
+            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+        user = upsert_user(db, userinfo, payload.timezone)
+    elif payload.access_token:
+        userinfo = get_userinfo_from_access_token(payload.access_token)
         if not userinfo.get("sub"):
             raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
         user = upsert_user(db, userinfo, payload.timezone)

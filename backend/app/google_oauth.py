@@ -11,6 +11,7 @@ from app.config import settings
 from app.models import AppUsuario, GoogleToken
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
 def exchange_code_for_tokens(code: str, redirect_uri: Optional[str] = None) -> Dict:
@@ -29,6 +30,21 @@ def exchange_code_for_tokens(code: str, redirect_uri: Optional[str] = None) -> D
 def get_userinfo_from_id_token(id_token_str: str) -> Dict:
     request = Request()
     info = google_id_token.verify_oauth2_token(id_token_str, request, settings.google_client_id)
+    return {
+        "sub": info.get("sub"),
+        "email": info.get("email"),
+        "name": info.get("name"),
+    }
+
+
+def get_userinfo_from_access_token(access_token: str) -> Dict:
+    response = requests.get(
+        USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    info = response.json()
     return {
         "sub": info.get("sub"),
         "email": info.get("email"),
