@@ -78,6 +78,30 @@ def upsert_user_and_token(db: Session, userinfo: Dict, token_data: Dict, timezon
     return user
 
 
+def upsert_user(db: Session, userinfo: Dict, timezone: Optional[str] = None) -> AppUsuario:
+    user = db.query(AppUsuario).filter(AppUsuario.google_sub == userinfo["sub"]).first()
+    if not user:
+        user = AppUsuario(
+            google_sub=userinfo["sub"],
+            email=userinfo.get("email", ""),
+            nome=userinfo.get("name"),
+            timezone=timezone or settings.default_timezone,
+        )
+        db.add(user)
+        db.flush()
+    else:
+        if userinfo.get("email"):
+            user.email = userinfo.get("email")
+        if userinfo.get("name"):
+            user.nome = userinfo.get("name")
+        if timezone:
+            user.timezone = timezone
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def build_credentials_from_token(token: GoogleToken) -> Credentials:
     creds = Credentials(
         token=token.access_token,
@@ -92,3 +116,13 @@ def build_credentials_from_token(token: GoogleToken) -> Credentials:
     if not creds.valid:
         creds.refresh(Request())
     return creds
+
+
+def build_credentials_from_access_token(access_token: str) -> Credentials:
+    return Credentials(
+        token=access_token,
+        token_uri=TOKEN_URL,
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        scopes=settings.google_scopes_list,
+    )

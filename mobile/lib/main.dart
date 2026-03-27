@@ -43,6 +43,7 @@ class _HomePageState extends State<HomePage> {
   final SpeechService _speech = createSpeechService();
 
   String? _jwt;
+  String? _googleAccessToken;
   String _status = 'Desconectado';
   bool _loading = false;
   bool _listening = false;
@@ -74,20 +75,34 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
+      final auth = await account.authentication;
+      _googleAccessToken = auth.accessToken;
+
       final serverAuthCode = account.serverAuthCode;
-      if (serverAuthCode == null || serverAuthCode.isEmpty) {
-        setState(() => _status = 'serverAuthCode não retornado.');
+      final hasAuthCode = serverAuthCode != null && serverAuthCode.isNotEmpty;
+      final hasIdToken = auth.idToken != null && auth.idToken!.isNotEmpty;
+
+      if (!hasAuthCode && !hasIdToken) {
+        setState(() => _status = 'Falha ao obter credenciais do Google.');
         return;
+      }
+
+      final payload = <String, dynamic>{
+        'redirect_uri': 'postmessage',
+        'timezone': 'America/Sao_Paulo',
+      };
+
+      if (hasAuthCode) {
+        payload['code'] = serverAuthCode;
+      } else {
+        payload['id_token'] = auth.idToken;
+        payload['access_token'] = auth.accessToken;
       }
 
       final response = await http.post(
         Uri.parse('${AppConfig.apiBaseUrl}/auth/google'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'code': serverAuthCode,
-          'redirect_uri': 'postmessage',
-          'timezone': 'America/Sao_Paulo',
-        }),
+        body: jsonEncode(payload),
       );
 
       if (response.statusCode != 200) {
@@ -130,7 +145,10 @@ class _HomePageState extends State<HomePage> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_jwt',
         },
-        body: jsonEncode({'texto': texto}),
+        body: jsonEncode({
+          'texto': texto,
+          if (_googleAccessToken != null) 'access_token': _googleAccessToken,
+        }),
       );
 
       if (response.statusCode != 200) {

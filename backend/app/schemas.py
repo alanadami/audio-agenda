@@ -4,7 +4,9 @@ from pydantic import BaseModel, EmailStr
 
 
 class AuthCodeIn(BaseModel):
-    code: str
+    code: Optional[str] = None
+    id_token: Optional[str] = None
+    access_token: Optional[str] = None
     redirect_uri: Optional[str] = None
     timezone: Optional[str] = None
 
@@ -29,6 +31,7 @@ class AuthResponse(BaseModel):
 class CommitmentCreate(BaseModel):
     texto: str
     timezone: Optional[str] = None
+    access_token: Optional[str] = None
 
 
 class CommitmentOut(BaseModel):

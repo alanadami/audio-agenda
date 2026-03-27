@@ -8,7 +8,14 @@ from app.auth import create_access_token, get_current_user
 from app.calendar_service import create_calendar_event
 from app.config import settings
 from app.db import get_db
-from app.google_oauth import exchange_code_for_tokens, get_userinfo_from_id_token, upsert_user_and_token, build_credentials_from_token
+from app.google_oauth import (
+    exchange_code_for_tokens,
+    get_userinfo_from_id_token,
+    upsert_user_and_token,
+    upsert_user,
+    build_credentials_from_token,
+    build_credentials_from_access_token,
+)
 from app.jobs import start_scheduler
 from app.models import AppCompromisso, AppUsuario
 from app.parser import parse_message
@@ -33,19 +40,27 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
     if not settings.google_client_id or not settings.google_client_secret:
         raise HTTPException(status_code=500, detail="Google OAuth não configurado")
 
-    token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
+    if payload.code:
+        token_data = exchange_code_for_tokens(payload.code, payload.redirect_uri)
 
-    if "id_token" not in token_data:
-        raise HTTPException(status_code=400, detail="id_token não retornado pelo Google")
+        if "id_token" not in token_data:
+            raise HTTPException(status_code=400, detail="id_token não retornado pelo Google")
 
-    userinfo = get_userinfo_from_id_token(token_data["id_token"])
-    if not userinfo.get("sub"):
-        raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+        userinfo = get_userinfo_from_id_token(token_data["id_token"])
+        if not userinfo.get("sub"):
+            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
 
-    try:
-        user = upsert_user_and_token(db, userinfo, token_data, payload.timezone)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        try:
+            user = upsert_user_and_token(db, userinfo, token_data, payload.timezone)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    elif payload.id_token:
+        userinfo = get_userinfo_from_id_token(payload.id_token)
+        if not userinfo.get("sub"):
+            raise HTTPException(status_code=400, detail="Não foi possível identificar o usuário")
+        user = upsert_user(db, userinfo, payload.timezone)
+    else:
+        raise HTTPException(status_code=400, detail="Informe code ou id_token")
     token = create_access_token(user.id)
 
     return {"token": token, "user": user}
@@ -82,10 +97,12 @@ def criar_compromisso(
     db.add(compromisso)
     db.flush()
 
-    if not usuario.token:
+    if usuario.token:
+        creds = build_credentials_from_token(usuario.token)
+    elif payload.access_token:
+        creds = build_credentials_from_access_token(payload.access_token)
+    else:
         raise HTTPException(status_code=400, detail="Usuário sem token do Google")
-
-    creds = build_credentials_from_token(usuario.token)
     evento = create_calendar_event(creds, analise, usuario.timezone or settings.default_timezone)
 
     compromisso.google_event_id = evento.get("id")
