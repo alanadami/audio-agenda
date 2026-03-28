@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field("", env="OPENAI_API_KEY")
     openai_model: str = Field("gpt-3.5-turbo", env="OPENAI_MODEL")
+    openai_transcribe_model: str = Field("gpt-4o-mini-transcribe", env="OPENAI_TRANSCRIBE_MODEL")
 
     google_client_id: str = Field("", env="GOOGLE_CLIENT_ID")
     google_client_secret: str = Field("", env="GOOGLE_CLIENT_SECRET")

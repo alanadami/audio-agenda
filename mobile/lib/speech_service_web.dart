@@ -1,74 +1,109 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+import 'dart:typed_data';
 
-import 'package:js/js.dart';
+import 'package:http/http.dart' as http;
 
+import 'app_config.dart';
 import 'speech_service.dart';
 
 class SpeechServiceImpl implements SpeechService {
-  dynamic _recognition;
+  html.MediaRecorder? _recorder;
+  html.MediaStream? _stream;
+  final List<html.Blob> _chunks = [];
+  String _mimeType = 'audio/webm';
 
-  bool _ensureRecognition() {
-    final dynamic speechRecognition = js_util.getProperty(html.window, 'SpeechRecognition') ??
-        js_util.getProperty(html.window, 'webkitSpeechRecognition');
-    if (speechRecognition == null) {
+  @override
+  Future<bool> initialize() async {
+    final devices = html.window.navigator.mediaDevices;
+    if (devices == null) {
       return false;
     }
-    _recognition = js_util.callConstructor(speechRecognition, []);
-    js_util.setProperty(_recognition, 'lang', 'pt-BR');
-    js_util.setProperty(_recognition, 'continuous', false);
-    js_util.setProperty(_recognition, 'interimResults', true);
+    if (html.MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+      _mimeType = 'audio/webm;codecs=opus';
+    } else if (html.MediaRecorder.isTypeSupported('audio/webm')) {
+      _mimeType = 'audio/webm';
+    } else if (html.MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+      _mimeType = 'audio/ogg;codecs=opus';
+    }
     return true;
   }
 
   @override
-  Future<bool> initialize() async {
-    if (_recognition != null) {
-      return true;
-    }
-    return _ensureRecognition();
-  }
-
-  @override
   Future<void> listen({required void Function(String text) onResult}) async {
-    if (_recognition == null) {
-      final ok = _ensureRecognition();
-      if (!ok) {
-        return;
-      }
+    final devices = html.window.navigator.mediaDevices;
+    if (devices == null) {
+      return;
     }
+    _stream = await devices.getUserMedia({'audio': true});
 
-    js_util.setProperty(
-      _recognition,
-      'onresult',
-      allowInterop((event) {
-        final results = js_util.getProperty(event, 'results');
-        final length = js_util.getProperty(results, 'length') as int;
-        if (length == 0) {
-          return;
-        }
-        final last = js_util.getProperty(results, length - 1);
-        final firstAlt = js_util.getProperty(last, 0);
-        final transcript = js_util.getProperty(firstAlt, 'transcript') as String;
-        onResult(transcript);
-      }),
-    );
+    final options = <String, dynamic>{'mimeType': _mimeType};
+    _recorder = html.MediaRecorder(_stream!, options);
+    _chunks.clear();
 
-    js_util.setProperty(
-      _recognition,
-      'onerror',
-      allowInterop((event) {
-        // noop: falhas são tratadas no app via initialize()
-      }),
-    );
+    _recorder!.addEventListener('dataavailable', (event) {
+      final e = event as html.BlobEvent;
+      if (e.data != null) {
+        _chunks.add(e.data!);
+      }
+    });
 
-    js_util.callMethod(_recognition, 'start', []);
+    _recorder!.addEventListener('stop', (event) async {
+      final blob = html.Blob(_chunks, _mimeType);
+      final bytes = await _blobToBytes(blob);
+      final text = await _sendForTranscription(bytes);
+      if (text.isNotEmpty) {
+        onResult(text);
+      }
+      _cleanup();
+    });
+
+    _recorder!.start();
   }
 
   @override
   Future<void> stop() async {
-    if (_recognition != null) {
-      js_util.callMethod(_recognition, 'stop', []);
+    if (_recorder != null && _recorder!.state != 'inactive') {
+      _recorder!.stop();
     }
+  }
+
+  Future<Uint8List> _blobToBytes(html.Blob blob) async {
+    final reader = html.FileReader();
+    final completer = Completer<Uint8List>();
+    reader.onLoadEnd.listen((_) {
+      final result = reader.result as ByteBuffer;
+      completer.complete(Uint8List.view(result));
+    });
+    reader.readAsArrayBuffer(blob);
+    return completer.future;
+  }
+
+  Future<String> _sendForTranscription(Uint8List bytes) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/transcribe');
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: 'audio.webm',
+      ),
+    );
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+    if (response.statusCode != 200) {
+      return '';
+    }
+    final data = jsonDecode(body) as Map<String, dynamic>;
+    return (data['text'] as String?)?.trim() ?? '';
+  }
+
+  void _cleanup() {
+    for (final track in _stream?.getTracks() ?? []) {
+      track.stop();
+    }
+    _stream = null;
+    _recorder = null;
   }
 }

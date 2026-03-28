@@ -1,12 +1,14 @@
 from datetime import datetime
+import io
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
+from openai import OpenAI
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from app.auth import create_access_token, get_current_user
@@ -108,6 +110,40 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Erro ao acessar o banco")
     except Exception:
         raise HTTPException(status_code=400, detail="Erro inesperado no login")
+
+
+@app.post("/transcribe")
+def transcribe_audio(file: UploadFile = File(...)):
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="OpenAI não configurada")
+
+    if not file.content_type or not file.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="Arquivo de áudio inválido")
+
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+
+    audio = io.BytesIO(data)
+    audio.name = file.filename or "audio.webm"
+
+    client = OpenAI(api_key=settings.openai_api_key)
+    try:
+        result = client.audio.transcriptions.create(
+            model=settings.openai_transcribe_model,
+            file=audio,
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Falha ao transcrever áudio")
+
+    text = getattr(result, "text", None)
+    if text is None:
+        try:
+            text = result.get("text")
+        except Exception:
+            text = ""
+
+    return {"text": text or ""}
 
 
 @app.post("/compromissos", response_model=CommitmentOut)

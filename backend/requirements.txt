@@ -13,3 +13,4 @@ python-jose[cryptography]
 apscheduler
 openai
 email-validator
+python-multipart
