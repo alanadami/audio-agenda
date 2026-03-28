@@ -49,6 +49,7 @@ class _HomePageState extends State<HomePage> {
   String _status = 'Desconectado';
   bool _loading = false;
   bool _listening = false;
+  String _lastTranscription = '';
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: _scopes,
@@ -181,13 +182,15 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         _listening = true;
-        _status = 'Ouvindo...';
+        _status = 'Gravando...';
       });
 
       await _speech.listen(
         onResult: (text) {
           setState(() {
             _textoController.text = text;
+            _lastTranscription = text;
+            _status = 'Transcrição pronta.';
           });
         },
         onError: (message) {
@@ -200,7 +203,7 @@ class _HomePageState extends State<HomePage> {
       await _speech.stop();
       setState(() {
         _listening = false;
-        _status = 'Gravação finalizada.';
+        _status = 'Processando áudio...';
       });
     }
   }
@@ -234,6 +237,13 @@ class _HomePageState extends State<HomePage> {
                 border: OutlineInputBorder(),
               ),
             ),
+            if (_lastTranscription.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Transcrição: $_lastTranscription',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
