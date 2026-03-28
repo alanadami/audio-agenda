@@ -14,6 +14,8 @@ class SpeechServiceImpl implements SpeechService {
   final List<html.Blob> _chunks = [];
   String _mimeType = 'audio/webm';
   static const Duration _transcribeTimeout = Duration(seconds: 30);
+  static const Duration _maxRecordDuration = Duration(seconds: 10);
+  Timer? _autoStopTimer;
 
   @override
   Future<bool> initialize() async {
@@ -54,7 +56,13 @@ class SpeechServiceImpl implements SpeechService {
     });
 
     _recorder!.addEventListener('stop', (event) async {
+      _autoStopTimer?.cancel();
       final blob = html.Blob(_chunks, _mimeType);
+      if (blob.size == 0) {
+        onError?.call('Áudio vazio.');
+        _cleanup();
+        return;
+      }
       final bytes = await _blobToBytes(blob);
       final result = await _sendForTranscription(bytes);
       if (result.text.isNotEmpty) {
@@ -66,6 +74,12 @@ class SpeechServiceImpl implements SpeechService {
     });
 
     _recorder!.start();
+    _autoStopTimer?.cancel();
+    _autoStopTimer = Timer(_maxRecordDuration, () {
+      if (_recorder != null && _recorder!.state != 'inactive') {
+        _recorder!.stop();
+      }
+    });
   }
 
   @override
@@ -73,6 +87,7 @@ class SpeechServiceImpl implements SpeechService {
     if (_recorder != null && _recorder!.state != 'inactive') {
       _recorder!.stop();
     }
+    _autoStopTimer?.cancel();
   }
 
   Future<Uint8List> _blobToBytes(html.Blob blob) async {
@@ -121,6 +136,7 @@ class SpeechServiceImpl implements SpeechService {
   }
 
   void _cleanup() {
+    _autoStopTimer?.cancel();
     for (final track in _stream?.getTracks() ?? []) {
       track.stop();
     }
