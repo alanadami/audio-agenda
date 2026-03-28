@@ -11,7 +11,10 @@ class SpeechServiceImpl implements SpeechService {
   }
 
   @override
-  Future<void> listen({required void Function(String text) onResult}) async {
+  Future<void> listen({
+    required void Function(String text) onResult,
+    void Function(String message)? onError,
+  }) async {
     await _speech.listen(
       localeId: 'pt_BR',
       onResult: (result) => onResult(result.recognizedWords),

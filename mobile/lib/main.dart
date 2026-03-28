@@ -190,6 +190,11 @@ class _HomePageState extends State<HomePage> {
             _textoController.text = text;
           });
         },
+        onError: (message) {
+          setState(() {
+            _status = message;
+          });
+        },
       );
     } else {
       await _speech.stop();

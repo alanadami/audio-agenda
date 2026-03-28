@@ -4,7 +4,10 @@ import 'speech_service_stub.dart'
 
 abstract class SpeechService {
   Future<bool> initialize();
-  Future<void> listen({required void Function(String text) onResult});
+  Future<void> listen({
+    required void Function(String text) onResult,
+    void Function(String message)? onError,
+  });
   Future<void> stop();
 }
 

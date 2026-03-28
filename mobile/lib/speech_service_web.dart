@@ -31,7 +31,10 @@ class SpeechServiceImpl implements SpeechService {
   }
 
   @override
-  Future<void> listen({required void Function(String text) onResult}) async {
+  Future<void> listen({
+    required void Function(String text) onResult,
+    void Function(String message)? onError,
+  }) async {
     final devices = html.window.navigator.mediaDevices;
     if (devices == null) {
       return;
@@ -55,6 +58,8 @@ class SpeechServiceImpl implements SpeechService {
       final text = await _sendForTranscription(bytes);
       if (text.isNotEmpty) {
         onResult(text);
+      } else {
+        onError?.call('Não foi possível transcrever o áudio.');
       }
       _cleanup();
     });
