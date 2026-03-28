@@ -39,6 +39,16 @@ logger = logging.getLogger("uvicorn.error")
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+
+def _is_audio_upload(upload: UploadFile) -> bool:
+    if upload.content_type and upload.content_type.startswith("audio/"):
+        return True
+    # Alguns browsers enviam como application/octet-stream
+    if upload.content_type in (None, "", "application/octet-stream"):
+        suffix = Path(upload.filename or "").suffix.lower()
+        return suffix in {".webm", ".ogg", ".wav", ".mp3", ".m4a"}
+    return False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -122,7 +132,7 @@ def transcribe_audio(file: UploadFile = File(...)):
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OpenAI não configurada")
 
-    if not file.content_type or not file.content_type.startswith("audio/"):
+    if not _is_audio_upload(file):
         raise HTTPException(status_code=400, detail="Arquivo de áudio inválido")
 
     data = file.file.read()
@@ -156,7 +166,7 @@ def upload_audio(audio: UploadFile = File(...)):
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OpenAI não configurada")
 
-    if not audio.content_type or not audio.content_type.startswith("audio/"):
+    if not _is_audio_upload(audio):
         raise HTTPException(status_code=400, detail="Arquivo de áudio inválido")
 
     suffix = Path(audio.filename or "").suffix or ".webm"
