@@ -10,7 +10,7 @@ PROMPT_TEMPLATE = (
     "Analise a seguinte mensagem e extraia informações de compromisso/evento. "
     "Retorne APENAS um JSON válido com os campos: \"titulo\", \"descricao\", \"data\" (YYYY-MM-DD), "
     "\"hora\" (HH:MM:00), \"local\". "
-    "REGRAS: Se não for um compromisso, retorne: {\"erro\": \"Nenhum compromisso identificado\"}. "
+    "REGRAS: Se não for um compromisso, retorne: {{\"erro\": \"Nenhum compromisso identificado\"}}. "
     "Se a data não for especificada, use a data de amanhã. "
     "Se a hora não for especificada, use \"09:00:00\". "
     "Se o local não for especificado, use \"A definir\". "
