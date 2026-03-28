@@ -74,7 +74,7 @@ class SpeechServiceImpl implements SpeechService {
       _cleanup();
     });
 
-    _recorder!.start();
+    _recorder!.start(250);
     _autoStopTimer?.cancel();
     _autoStopTimer = Timer(_maxRecordDuration, () {
       if (_recorder != null && _recorder!.state != 'inactive') {
