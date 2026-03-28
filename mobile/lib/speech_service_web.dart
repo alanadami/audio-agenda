@@ -13,6 +13,7 @@ class SpeechServiceImpl implements SpeechService {
   html.MediaStream? _stream;
   final List<html.Blob> _chunks = [];
   String _mimeType = 'audio/webm';
+  static const Duration _transcribeTimeout = Duration(seconds: 30);
 
   @override
   Future<bool> initialize() async {
@@ -55,11 +56,11 @@ class SpeechServiceImpl implements SpeechService {
     _recorder!.addEventListener('stop', (event) async {
       final blob = html.Blob(_chunks, _mimeType);
       final bytes = await _blobToBytes(blob);
-      final text = await _sendForTranscription(bytes);
-      if (text.isNotEmpty) {
-        onResult(text);
+      final result = await _sendForTranscription(bytes);
+      if (result.text.isNotEmpty) {
+        onResult(result.text);
       } else {
-        onError?.call('Não foi possível transcrever o áudio.');
+        onError?.call(result.error ?? 'Não foi possível transcrever o áudio.');
       }
       _cleanup();
     });
@@ -85,7 +86,7 @@ class SpeechServiceImpl implements SpeechService {
     return completer.future;
   }
 
-  Future<String> _sendForTranscription(Uint8List bytes) async {
+  Future<_TranscribeResult> _sendForTranscription(Uint8List bytes) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}/transcribe');
     final request = http.MultipartRequest('POST', uri);
     request.files.add(
@@ -95,13 +96,28 @@ class SpeechServiceImpl implements SpeechService {
         filename: 'audio.webm',
       ),
     );
-    final response = await request.send();
-    final body = await response.stream.bytesToString();
-    if (response.statusCode != 200) {
-      return '';
+    try {
+      final response = await request.send().timeout(_transcribeTimeout);
+      final body = await response.stream.bytesToString();
+      if (response.statusCode != 200) {
+        String? detail;
+        try {
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          detail = data['detail']?.toString();
+        } catch (_) {}
+        return _TranscribeResult(
+          '',
+          detail ?? 'Falha ao transcrever áudio (HTTP ${response.statusCode}).',
+        );
+      }
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final text = (data['text'] as String?)?.trim() ?? '';
+      return _TranscribeResult(text, text.isEmpty ? 'Transcrição vazia.' : null);
+    } on TimeoutException {
+      return _TranscribeResult('', 'Tempo limite na transcrição.');
+    } catch (_) {
+      return _TranscribeResult('', 'Falha ao enviar áudio para transcrição.');
     }
-    final data = jsonDecode(body) as Map<String, dynamic>;
-    return (data['text'] as String?)?.trim() ?? '';
   }
 
   void _cleanup() {
@@ -111,4 +127,11 @@ class SpeechServiceImpl implements SpeechService {
     _stream = null;
     _recorder = null;
   }
+}
+
+class _TranscribeResult {
+  final String text;
+  final String? error;
+
+  _TranscribeResult(this.text, this.error);
 }
