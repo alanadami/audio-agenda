@@ -26,12 +26,15 @@ def parse_message(texto: str, hoje: datetime) -> dict:
     client = OpenAI(api_key=settings.openai_api_key)
     prompt = PROMPT_TEMPLATE.format(hoje=hoje.isoformat(), texto=texto)
 
-    response = client.chat.completions.create(
-        model=settings.openai_model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=400,
-        temperature=0.1,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
+            temperature=0.1,
+        )
+    except Exception:
+        return {"erro": "Falha ao chamar OpenAI"}
 
     content = response.choices[0].message.content.strip()
     content = content.replace("```json", "").replace("```", "").strip()
