@@ -180,45 +180,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _toggleListening() async {
-    if (!_listening) {
-      final available = await _speech.initialize();
-      if (!available) {
-        setState(() => _status = 'Speech-to-text indisponível.');
-        return;
-      }
-
-      setState(() {
-        _listening = true;
-        _status = 'Gravando... toque no microfone para parar.';
-      });
-
-      await _speech.listen(
-        onResult: (text) {
-          setState(() {
-            _awaitingTranscription = false;
-            _transcribeTimer?.cancel();
-            _textoController.text = text;
-            _lastTranscription = text;
-            _pendingConfirmation = true;
-            _status = 'Transcrição pronta. Confirme para salvar.';
-          });
-        },
-        onError: (message) {
-          setState(() {
-            _awaitingTranscription = false;
-            _transcribeTimer?.cancel();
-            _pendingConfirmation = false;
-            _status = message;
-          });
-        },
-      );
-    } else {
-      await _speech.stop();
+    if (_listening) {
       setState(() {
         _listening = false;
         _status = 'Processando áudio...';
         _awaitingTranscription = true;
       });
+      await _speech.stop();
       _transcribeTimer?.cancel();
       _transcribeTimer = Timer(const Duration(seconds: 70), () {
         if (!_awaitingTranscription) return;
@@ -228,7 +196,43 @@ class _HomePageState extends State<HomePage> {
           _status = 'A transcrição demorou. Tente um áudio mais curto.';
         });
       });
+      return;
     }
+
+    final available = await _speech.initialize();
+    if (!available) {
+      setState(() => _status = 'Speech-to-text indisponível.');
+      return;
+    }
+
+    setState(() {
+      _listening = true;
+      _awaitingTranscription = false;
+      _status = 'Gravando... toque no microfone para parar.';
+    });
+
+    _speech.listen(
+      onResult: (text) {
+        setState(() {
+          _listening = false;
+          _awaitingTranscription = false;
+          _transcribeTimer?.cancel();
+          _textoController.text = text;
+          _lastTranscription = text;
+          _pendingConfirmation = true;
+          _status = 'Transcrição pronta. Confirme para salvar.';
+        });
+      },
+      onError: (message) {
+        setState(() {
+          _listening = false;
+          _awaitingTranscription = false;
+          _transcribeTimer?.cancel();
+          _pendingConfirmation = false;
+          _status = message;
+        });
+      },
+    );
   }
 
   @override
