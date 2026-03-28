@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'dart:async';
 
 import 'app_config.dart';
 import 'speech_service.dart';
@@ -50,6 +51,8 @@ class _HomePageState extends State<HomePage> {
   bool _loading = false;
   bool _listening = false;
   String _lastTranscription = '';
+  bool _awaitingTranscription = false;
+  Timer? _transcribeTimer;
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: _scopes,
@@ -182,12 +185,14 @@ class _HomePageState extends State<HomePage> {
 
       setState(() {
         _listening = true;
-        _status = 'Gravando...';
+        _status = 'Gravando... toque no microfone para parar.';
       });
 
       await _speech.listen(
         onResult: (text) {
           setState(() {
+            _awaitingTranscription = false;
+            _transcribeTimer?.cancel();
             _textoController.text = text;
             _lastTranscription = text;
             _status = 'Transcrição pronta.';
@@ -195,6 +200,8 @@ class _HomePageState extends State<HomePage> {
         },
         onError: (message) {
           setState(() {
+            _awaitingTranscription = false;
+            _transcribeTimer?.cancel();
             _status = message;
           });
         },
@@ -204,6 +211,15 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _listening = false;
         _status = 'Processando áudio...';
+        _awaitingTranscription = true;
+      });
+      _transcribeTimer?.cancel();
+      _transcribeTimer = Timer(const Duration(seconds: 35), () {
+        if (!_awaitingTranscription) return;
+        setState(() {
+          _awaitingTranscription = false;
+          _status = 'A transcrição demorou. Tente novamente.';
+        });
       });
     }
   }
@@ -212,6 +228,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _textoController.dispose();
     _speech.stop();
+    _transcribeTimer?.cancel();
     super.dispose();
   }
 
