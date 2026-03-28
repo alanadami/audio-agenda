@@ -52,6 +52,7 @@ class _HomePageState extends State<HomePage> {
   bool _listening = false;
   String _lastTranscription = '';
   bool _awaitingTranscription = false;
+  bool _pendingConfirmation = false;
   Timer? _transcribeTimer;
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -168,6 +169,9 @@ class _HomePageState extends State<HomePage> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final link = data['google_event_link'] ?? '';
       setState(() => _status = 'Compromisso criado. $link');
+      setState(() {
+        _pendingConfirmation = false;
+      });
     } catch (e) {
       setState(() => _status = 'Erro: $e');
     } finally {
@@ -195,13 +199,15 @@ class _HomePageState extends State<HomePage> {
             _transcribeTimer?.cancel();
             _textoController.text = text;
             _lastTranscription = text;
-            _status = 'Transcrição pronta.';
+            _pendingConfirmation = true;
+            _status = 'Transcrição pronta. Confirme para salvar.';
           });
         },
         onError: (message) {
           setState(() {
             _awaitingTranscription = false;
             _transcribeTimer?.cancel();
+            _pendingConfirmation = false;
             _status = message;
           });
         },
@@ -218,6 +224,7 @@ class _HomePageState extends State<HomePage> {
         if (!_awaitingTranscription) return;
         setState(() {
           _awaitingTranscription = false;
+          _pendingConfirmation = false;
           _status = 'A transcrição demorou. Tente um áudio mais curto.';
         });
       });
@@ -253,7 +260,18 @@ class _HomePageState extends State<HomePage> {
                 labelText: 'Mensagem do compromisso',
                 border: OutlineInputBorder(),
               ),
+              onChanged: (_) {
+                if (_pendingConfirmation) {
+                  setState(() {
+                    _pendingConfirmation = false;
+                  });
+                }
+              },
             ),
+            if (_awaitingTranscription) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ],
             if (_lastTranscription.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
@@ -261,12 +279,19 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(fontSize: 12),
               ),
             ],
+            if (_pendingConfirmation) ...[
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loading ? null : _criarCompromisso,
+                child: const Text('Confirmar transcrição e salvar'),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _loading ? null : _criarCompromisso,
+                    onPressed: (_loading || _awaitingTranscription) ? null : _criarCompromisso,
                     child: const Text('Salvar compromisso'),
                   ),
                 ),
