@@ -214,11 +214,11 @@ class _HomePageState extends State<HomePage> {
         _awaitingTranscription = true;
       });
       _transcribeTimer?.cancel();
-      _transcribeTimer = Timer(const Duration(seconds: 35), () {
+      _transcribeTimer = Timer(const Duration(seconds: 70), () {
         if (!_awaitingTranscription) return;
         setState(() {
           _awaitingTranscription = false;
-          _status = 'A transcrição demorou. Tente novamente.';
+          _status = 'A transcrição demorou. Tente um áudio mais curto.';
         });
       });
     }

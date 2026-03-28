@@ -13,8 +13,8 @@ class SpeechServiceImpl implements SpeechService {
   html.MediaStream? _stream;
   final List<html.Blob> _chunks = [];
   String _mimeType = 'audio/webm';
-  static const Duration _transcribeTimeout = Duration(seconds: 30);
-  static const Duration _maxRecordDuration = Duration(seconds: 10);
+  static const Duration _transcribeTimeout = Duration(seconds: 60);
+  static const Duration _maxRecordDuration = Duration(seconds: 6);
   Timer? _autoStopTimer;
 
   @override
