@@ -2,6 +2,7 @@ from datetime import datetime
 import io
 import logging
 import os
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
 from openai import OpenAI
+from imageio_ffmpeg import get_ffmpeg_exe
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from app.auth import create_access_token, get_current_user
@@ -48,6 +50,27 @@ def _is_audio_upload(upload: UploadFile) -> bool:
         suffix = Path(upload.filename or "").suffix.lower()
         return suffix in {".webm", ".ogg", ".wav", ".mp3", ".m4a"}
     return False
+
+
+def _convert_to_mp3(src: Path, dst: Path) -> None:
+    ffmpeg = get_ffmpeg_exe()
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(src),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-b:a",
+        "64k",
+        str(dst),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {result.stderr[:500]}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -172,13 +195,16 @@ def upload_audio(audio: UploadFile = File(...)):
     suffix = Path(audio.filename or "").suffix or ".webm"
     filename = f"{uuid.uuid4().hex}{suffix}"
     filepath = UPLOAD_DIR / filename
+    mp3_path = filepath.with_suffix(".mp3")
 
     try:
         with filepath.open("wb") as out:
             out.write(audio.file.read())
 
+        _convert_to_mp3(filepath, mp3_path)
+
         client = OpenAI(api_key=settings.openai_api_key)
-        with filepath.open("rb") as f:
+        with mp3_path.open("rb") as f:
             result = client.audio.transcriptions.create(
                 model=settings.openai_transcribe_model,
                 file=f,
@@ -196,6 +222,8 @@ def upload_audio(audio: UploadFile = File(...)):
         try:
             if filepath.exists():
                 os.remove(filepath)
+            if mp3_path.exists():
+                os.remove(mp3_path)
         except Exception:
             pass
 

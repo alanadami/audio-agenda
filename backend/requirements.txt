@@ -14,3 +14,4 @@ apscheduler
 openai
 email-validator
 python-multipart
+imageio-ffmpeg
