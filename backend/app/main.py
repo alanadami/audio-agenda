@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,7 @@ from app.parser import parse_message
 from app.schemas import AuthCodeIn, AuthResponse, CommitmentCreate, CommitmentOut
 
 app = FastAPI(title="Agenda App API")
+logger = logging.getLogger("uvicorn.error")
 
 app.add_middleware(
     CORSMiddleware,
@@ -159,6 +161,11 @@ def criar_compromisso(
     except HTTPException:
         raise
     except Exception:
+        logger.exception(
+            "Erro inesperado ao criar compromisso. has_token=%s has_access_token=%s",
+            bool(usuario.token),
+            bool(payload.access_token),
+        )
         raise HTTPException(status_code=400, detail="Erro inesperado ao criar compromisso")
 
     return {
