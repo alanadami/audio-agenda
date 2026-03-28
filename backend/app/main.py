@@ -1,6 +1,9 @@
 from datetime import datetime
 import io
 import logging
+import os
+import uuid
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +36,8 @@ from app.schemas import AuthCodeIn, AuthResponse, CommitmentCreate, CommitmentOu
 
 app = FastAPI(title="Agenda App API")
 logger = logging.getLogger("uvicorn.error")
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -144,6 +149,45 @@ def transcribe_audio(file: UploadFile = File(...)):
             text = ""
 
     return {"text": text or ""}
+
+
+@app.post("/upload-audio")
+def upload_audio(audio: UploadFile = File(...)):
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="OpenAI não configurada")
+
+    if not audio.content_type or not audio.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="Arquivo de áudio inválido")
+
+    suffix = Path(audio.filename or "").suffix or ".webm"
+    filename = f"{uuid.uuid4().hex}{suffix}"
+    filepath = UPLOAD_DIR / filename
+
+    try:
+        with filepath.open("wb") as out:
+            out.write(audio.file.read())
+
+        client = OpenAI(api_key=settings.openai_api_key)
+        with filepath.open("rb") as f:
+            result = client.audio.transcriptions.create(
+                model=settings.openai_transcribe_model,
+                file=f,
+            )
+        text = getattr(result, "text", None)
+        if text is None:
+            try:
+                text = result.get("text")
+            except Exception:
+                text = ""
+        return {"text": text or ""}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Falha ao transcrever áudio")
+    finally:
+        try:
+            if filepath.exists():
+                os.remove(filepath)
+        except Exception:
+            pass
 
 
 @app.post("/compromissos", response_model=CommitmentOut)

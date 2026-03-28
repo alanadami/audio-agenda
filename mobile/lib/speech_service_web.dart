@@ -102,11 +102,11 @@ class SpeechServiceImpl implements SpeechService {
   }
 
   Future<_TranscribeResult> _sendForTranscription(Uint8List bytes) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/transcribe');
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/upload-audio');
     final request = http.MultipartRequest('POST', uri);
     request.files.add(
       http.MultipartFile.fromBytes(
-        'file',
+        'audio',
         bytes,
         filename: 'audio.webm',
       ),
