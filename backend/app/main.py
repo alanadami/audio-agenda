@@ -152,6 +152,11 @@ def auth_google(payload: AuthCodeIn, db: Session = Depends(get_db)):
 
 @app.post("/transcribe")
 def transcribe_audio(file: UploadFile = File(...)):
+    logger.info(
+        ">>> /transcribe | filename=%s | content_type=%s",
+        file.filename,
+        file.content_type,
+    )
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OpenAI não configurada")
 
@@ -159,6 +164,7 @@ def transcribe_audio(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Arquivo de áudio inválido")
 
     data = file.file.read()
+    logger.info(">>> tamanho: %d bytes", len(data))
     if not data:
         raise HTTPException(status_code=400, detail="Arquivo vazio")
 
@@ -186,6 +192,11 @@ def transcribe_audio(file: UploadFile = File(...)):
 
 @app.post("/upload-audio")
 def upload_audio(audio: UploadFile = File(...)):
+    logger.info(
+        ">>> /upload-audio | filename=%s | content_type=%s",
+        audio.filename,
+        audio.content_type,
+    )
     if not settings.openai_api_key:
         raise HTTPException(status_code=500, detail="OpenAI não configurada")
 
@@ -198,8 +209,10 @@ def upload_audio(audio: UploadFile = File(...)):
     mp3_path = filepath.with_suffix(".mp3")
 
     try:
+        data = audio.file.read()
+        logger.info(">>> tamanho: %d bytes", len(data))
         with filepath.open("wb") as out:
-            out.write(audio.file.read())
+            out.write(data)
 
         _convert_to_mp3(filepath, mp3_path)
 

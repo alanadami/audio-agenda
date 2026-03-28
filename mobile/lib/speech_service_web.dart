@@ -4,6 +4,7 @@ import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'app_config.dart';
 import 'speech_service.dart';
@@ -102,18 +103,30 @@ class SpeechServiceImpl implements SpeechService {
   }
 
   Future<_TranscribeResult> _sendForTranscription(Uint8List bytes) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/upload-audio');
-    final request = http.MultipartRequest('POST', uri);
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'audio',
-        bytes,
-        filename: 'audio.webm',
-      ),
-    );
     try {
+      print('>>> [1] Iniciando envio de áudio');
+      print('>>> [2] Bytes obtidos: ${bytes.length}');
+      if (bytes.isEmpty) {
+        print('>>> ERRO: áudio vazio ou null');
+        return _TranscribeResult('', 'Áudio vazio.');
+      }
+
+      final uri = Uri.parse('${AppConfig.apiBaseUrl}/upload-audio');
+      final request = http.MultipartRequest('POST', uri);
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          bytes,
+          filename: 'audio.webm',
+          contentType: MediaType('audio', 'webm'),
+        ),
+      );
+
+      print('>>> [3] Enviando requisição para $uri');
       final response = await request.send().timeout(_transcribeTimeout);
+      print('>>> [4] Status: ${response.statusCode}');
       final body = await response.stream.bytesToString();
+      print('>>> [5] Resposta: $body');
       if (response.statusCode != 200) {
         String? detail;
         try {
@@ -128,9 +141,13 @@ class SpeechServiceImpl implements SpeechService {
       final data = jsonDecode(body) as Map<String, dynamic>;
       final text = (data['text'] as String?)?.trim() ?? '';
       return _TranscribeResult(text, text.isEmpty ? 'Transcrição vazia.' : null);
-    } on TimeoutException {
+    } on TimeoutException catch (e, stack) {
+      print('>>> EXCEÇÃO: $e');
+      print('>>> STACK: $stack');
       return _TranscribeResult('', 'Tempo limite na transcrição.');
-    } catch (_) {
+    } catch (e, stack) {
+      print('>>> EXCEÇÃO: $e');
+      print('>>> STACK: $stack');
       return _TranscribeResult('', 'Falha ao enviar áudio para transcrição.');
     }
   }
